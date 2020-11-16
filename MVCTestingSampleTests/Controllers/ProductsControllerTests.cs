@@ -29,8 +29,8 @@ namespace MVCTestingSample.Controllers.Tests
 
             // Assert
             // If view is returned
-            Assert.IsInstanceOfType(result, typeof(ViewResult)); 
-            ViewResult viewResult = result as ViewResult; 
+            Assert.IsInstanceOfType(result, typeof(ViewResult));
+            ViewResult viewResult = result as ViewResult;
 
             // List<> passed into view
             var model = viewResult.ViewData.Model;
@@ -58,6 +58,70 @@ namespace MVCTestingSample.Controllers.Tests
                     ProductId = 3, Name = "Desk", Price = "200"
                 }
             };
+        }
+
+        [TestMethod()]
+        public void Add_ReturnsViewResult()
+        {
+            Mock<IProductRepository> mockRepo = new Mock<IProductRepository>();
+            ProductsController controller = new ProductsController(mockRepo.Object);
+
+            var results = controller.Add();
+
+            Assert.IsInstanceOfType(results, typeof(ViewResult));
+        }
+
+
+        [TestMethod]
+        public async Task AddPost_ReturnsRedirectAndAddsProduct_WhenModelStateIsValid()
+        {
+            Mock<IProductRepository> mockRepo = new Mock<IProductRepository>();
+            mockRepo.Setup(repo => repo.AddProductAsync(It.IsAny<Product>()))
+                    .Returns(Task.CompletedTask)
+                    .Verifiable();
+
+            var controller = new ProductsController(mockRepo.Object);
+            Product p = new Product()
+            {
+                Name = "Test",
+                Price = "100"
+            };
+            var result = await controller.Add(p);
+
+            Assert.IsInstanceOfType(result, typeof(RedirectToActionResult));
+
+            var redirectResult = result as RedirectToActionResult;
+            Assert.IsNull(redirectResult.ControllerName, "Controller name should not be specified in the redirect");
+
+            Assert.AreEqual("Index", redirectResult.ActionName);
+
+            mockRepo.Verify();
+        }
+
+        [TestMethod]
+        public async Task AddPost_ReturnsWiewWithModel_WhenModelStateIsInvalid()
+        {
+            Mock<IProductRepository> mockRepo = new Mock<IProductRepository>();
+            var controller = new ProductsController(mockRepo.Object);
+            var invalidProduct = new Product()
+            {
+                Name = null, // Name is Required to be valid
+                Price = "3",
+                ProductId = 1
+            };
+            // Mark ModelState as Invalid
+            controller.ModelState.AddModelError("Name", "Required");
+
+            IActionResult result = await controller.Add(invalidProduct);
+
+            Assert.IsInstanceOfType(result, typeof(ViewResult));
+            var viewResult = result as ViewResult;
+            Assert.IsInstanceOfType(viewResult.Model, typeof(Product));
+
+            // Ensure Invalid Product is passed back to view
+            Product modelBoundProduct = viewResult.Model as Product;
+            Assert.AreEqual(modelBoundProduct, invalidProduct, "Invalid product should be passed back to View");
+
         }
     }
 }
